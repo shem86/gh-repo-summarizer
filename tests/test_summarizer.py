@@ -22,30 +22,22 @@ class TestBuildPrompt:
         assert "--- src/main.py ---" in prompt
         assert "print('hello')" in prompt
 
-    def test_contains_tool_instruction(self):
+    def test_does_not_reference_tool(self):
         prompt = _build_prompt(SAMPLE_TREE, SAMPLE_FILES)
-        assert "provide_summary" in prompt
+        assert "provide_summary" not in prompt
 
 
 class TestSummarizeRepo:
     async def test_happy_path(self):
-        mock_block = type(
-            "ToolUseBlock",
-            (),
-            {
-                "type": "tool_use",
-                "name": "provide_summary",
-                "input": {
-                    "summary": "A test project",
-                    "technologies": ["Python"],
-                    "structure": "Flat structure",
-                },
-            },
-        )()
-        mock_response = type("Response", (), {"content": [mock_block]})()
+        expected = SummarizeResponse(
+            summary="A test project",
+            technologies=["Python"],
+            structure="Flat structure",
+        )
+        mock_response = type("ParsedResponse", (), {"parsed_output": expected})()
 
         mock_client = AsyncMock()
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.parse.return_value = mock_response
 
         with patch("app.summarizer.client", mock_client):
             result = await summarize_repo(SAMPLE_TREE, SAMPLE_FILES)
@@ -53,14 +45,14 @@ class TestSummarizeRepo:
         assert isinstance(result, SummarizeResponse)
         assert result.summary == "A test project"
         assert result.technologies == ["Python"]
+        mock_client.messages.parse.assert_called_once()
 
-    async def test_no_tool_call_raises(self):
-        mock_block = type("TextBlock", (), {"type": "text", "text": "hello"})()
-        mock_response = type("Response", (), {"content": [mock_block]})()
+    async def test_refusal_raises(self):
+        mock_response = type("ParsedResponse", (), {"parsed_output": None})()
 
         mock_client = AsyncMock()
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.parse.return_value = mock_response
 
         with patch("app.summarizer.client", mock_client):
-            with pytest.raises(RuntimeError, match="expected tool call"):
+            with pytest.raises(RuntimeError, match="refused"):
                 await summarize_repo(SAMPLE_TREE, SAMPLE_FILES)

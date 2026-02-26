@@ -6,30 +6,6 @@ from app.models import SummarizeResponse
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 
-SUMMARY_TOOL = {
-    "name": "provide_summary",
-    "description": "Provide a structured summary of the GitHub repository.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "summary": {
-                "type": "string",
-                "description": "A clear, human-readable description of what this project does, its purpose, and key features. 2-4 sentences.",
-            },
-            "technologies": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Main technologies, frameworks, libraries, and languages used. Be specific (e.g. 'React' not 'JavaScript').",
-            },
-            "structure": {
-                "type": "string",
-                "description": "Brief description of how the project is organized: key directories, architecture pattern, notable choices. 2-4 sentences.",
-            },
-        },
-        "required": ["summary", "technologies", "structure"],
-    },
-}
-
 client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 
@@ -39,7 +15,7 @@ def _build_prompt(tree_text: str, file_contents: list[dict[str, str]]) -> str:
     for f in file_contents:
         files_section += f"\n--- {f['path']} ---\n{f['content']}\n"
 
-    return f"""Analyze the following GitHub repository and provide a structured summary using the provide_summary tool.
+    return f"""Analyze the following GitHub repository and return a structured summary.
 
 ## Repository Directory Tree
 
@@ -50,26 +26,23 @@ def _build_prompt(tree_text: str, file_contents: list[dict[str, str]]) -> str:
 ## File Contents
 {files_section}
 
-Use the provide_summary tool to return your analysis. Include only technologies clearly evidenced in the code or configuration files."""
+Include only technologies clearly evidenced in the code or configuration files."""
 
 
 async def summarize_repo(
     tree_text: str, file_contents: list[dict[str, str]]
 ) -> SummarizeResponse:
-    """Send repo content to Claude and get a structured summary via tool use."""
+    """Send repo content to Claude and get a structured summary via structured outputs."""
     prompt = _build_prompt(tree_text, file_contents)
 
-    response = await client.messages.create(
+    response = await client.messages.parse(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
-        tools=[SUMMARY_TOOL],
-        tool_choice={"type": "tool", "name": "provide_summary"},
+        output_format=SummarizeResponse,
     )
 
-    # Extract the tool use block
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "provide_summary":
-            return SummarizeResponse(**block.input)
+    if response.parsed_output is None:
+        raise RuntimeError("Claude refused to summarize this repository")
 
-    raise RuntimeError("LLM did not return the expected tool call")
+    return response.parsed_output
