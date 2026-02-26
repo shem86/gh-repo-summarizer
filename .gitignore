@@ -15,4 +15,4 @@ venv/
 .idea/
 
 # Claude Code
-.claude/
+.claude/settings.local.json

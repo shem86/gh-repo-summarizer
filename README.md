@@ -44,9 +44,19 @@ Response:
 }
 ```
 
+## Testing
+
+```bash
+pytest -v
+```
+
+Tests cover models (Pydantic validation), GitHub API interaction (mocked with `respx`), LLM summarization (mocked Anthropic client), and FastAPI endpoint error handling. No real API calls are made.
+
 ## Model Choice
 
-Uses **Claude Sonnet 4.5** (`claude-sonnet-4-5-20250929`) — the best balance of speed, cost, and quality for summarization tasks. Opus would be overkill for this use case; Haiku might miss nuance in complex repos.
+Uses **Claude Sonnet 4.6** (`claude-sonnet-4-6`)
+Opus would be overkill for this use case; Haiku might miss nuance in complex repos.
+Sonnet 4.6 represents the "sweet spot" in 2026 for developer tools. It provides Opus-level reasoning for complex architectural patterns while maintaining the speed and cost-efficiency required for a responsive user experience. It is specifically optimized for "tree-first" repository traversal, allowing it to navigate large-scale projects with minimal hallucination.
 
 ## Repository Content Strategy
 

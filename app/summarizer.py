@@ -3,7 +3,7 @@ from anthropic import AsyncAnthropic
 from app.config import settings
 from app.models import SummarizeResponse
 
-MODEL = "claude-sonnet-4-5-20250929"
+MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 
 SUMMARY_TOOL = {
