@@ -47,7 +47,7 @@ Response:
 ## Testing
 
 ```bash
-pytest -v
+python3 -m pytest -v
 ```
 
 Tests cover models (Pydantic validation), GitHub API interaction (mocked with `respx`), LLM summarization (mocked Anthropic client), and FastAPI endpoint error handling. No real API calls are made.

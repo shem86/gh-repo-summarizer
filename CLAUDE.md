@@ -17,6 +17,7 @@ A FastAPI service that takes a GitHub repository URL (`POST /summarize`) and ret
 ### `POST /summarize`
 
 **Request:**
+
 ```json
 {
   "github_url": "https://github.com/psf/requests"
@@ -24,6 +25,7 @@ A FastAPI service that takes a GitHub repository URL (`POST /summarize`) and ret
 ```
 
 **Success response (200):**
+
 ```json
 {
   "summary": "Human-readable description of what the project does",
@@ -33,6 +35,7 @@ A FastAPI service that takes a GitHub repository URL (`POST /summarize`) and ret
 ```
 
 **Error response (appropriate HTTP status code):**
+
 ```json
 {
   "status": "error",
@@ -68,7 +71,7 @@ There is no single correct approach. Optimize for giving the LLM the best unders
 
 Keep it simple and flat:
 
-```
+```text
 gh-repo-summarizer/
 ├── CLAUDE.md
 ├── README.md
