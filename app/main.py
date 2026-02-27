@@ -1,15 +1,30 @@
+from contextlib import asynccontextmanager
+from typing import Optional
+
 import anthropic
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.cache import BaseCache, LocalFileCache
 from app.config import settings
-from app.github import fetch_repo_content
+from app.github import fetch_repo_content, parse_github_url
 from app.models import SummarizeRequest, SummarizeResponse
 from app.summarizer import summarize_repo
 
-app = FastAPI(title="GitHub Repository Summarizer")
+_cache: Optional[BaseCache] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _cache
+    if settings.cache_enabled:
+        _cache = LocalFileCache(settings.cache_dir)
+    yield
+
+
+app = FastAPI(title="GitHub Repository Summarizer", lifespan=lifespan)
 
 
 @app.exception_handler(RequestValidationError)
@@ -49,6 +64,14 @@ async def summarize(request: SummarizeRequest) -> SummarizeResponse:
             status_code=500, detail="ANTHROPIC_API_KEY not configured"
         )
 
+    owner, repo = parse_github_url(request.github_url)
+    cache_key = f"{owner}__{repo}".lower()
+
+    if _cache is not None:
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return SummarizeResponse(**cached)
+
     try:
         tree_text, file_contents = await fetch_repo_content(request.github_url)
     except ValueError as e:
@@ -78,5 +101,11 @@ async def summarize(request: SummarizeRequest) -> SummarizeResponse:
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+    if _cache is not None:
+        try:
+            _cache.set(cache_key, result.model_dump(), settings.cache_ttl)
+        except OSError:
+            pass
 
     return result

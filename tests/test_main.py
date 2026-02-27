@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import anthropic
 import httpx
@@ -121,3 +121,68 @@ class TestSummarizeEndpoint:
 
         assert resp.status_code == 502
         assert "LLM API error" in resp.json()["message"]
+
+
+class TestCacheIntegration:
+    # Cycle 6 — cache hit skips GitHub + LLM
+    async def test_cache_hit_skips_fetch_and_summarize(self, client):
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = MOCK_RESPONSE.model_dump()
+
+        with (
+            patch("app.main._cache", mock_cache),
+            patch("app.main.fetch_repo_content", new_callable=AsyncMock) as mock_fetch,
+            patch("app.main.summarize_repo", new_callable=AsyncMock) as mock_summarize,
+            patch("app.main.settings") as mock_settings,
+        ):
+            mock_settings.anthropic_api_key = "test-key"
+            resp = await client.post("/summarize", json={"github_url": VALID_URL})
+
+        assert resp.status_code == 200
+        assert resp.json()["summary"] == "A test project"
+        mock_fetch.assert_not_called()
+        mock_summarize.assert_not_called()
+
+    # Cycle 7 — cache miss stores result
+    async def test_cache_miss_stores_result(self, client):
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+
+        with (
+            patch("app.main._cache", mock_cache),
+            patch("app.main.fetch_repo_content", new_callable=AsyncMock) as mock_fetch,
+            patch("app.main.summarize_repo", new_callable=AsyncMock) as mock_summarize,
+            patch("app.main.settings") as mock_settings,
+        ):
+            mock_settings.anthropic_api_key = "test-key"
+            mock_settings.cache_ttl = 604800
+            mock_fetch.return_value = (MOCK_TREE, MOCK_FILES)
+            mock_summarize.return_value = MOCK_RESPONSE
+
+            resp = await client.post("/summarize", json={"github_url": VALID_URL})
+
+        assert resp.status_code == 200
+        mock_cache.set.assert_called_once_with(
+            "owner__repo", MOCK_RESPONSE.model_dump(), 604800
+        )
+
+    # Cycle 8 — cache write failure is non-fatal
+    async def test_cache_write_failure_is_nonfatal(self, client):
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_cache.set.side_effect = OSError("disk full")
+
+        with (
+            patch("app.main._cache", mock_cache),
+            patch("app.main.fetch_repo_content", new_callable=AsyncMock) as mock_fetch,
+            patch("app.main.summarize_repo", new_callable=AsyncMock) as mock_summarize,
+            patch("app.main.settings") as mock_settings,
+        ):
+            mock_settings.anthropic_api_key = "test-key"
+            mock_settings.cache_ttl = 604800
+            mock_fetch.return_value = (MOCK_TREE, MOCK_FILES)
+            mock_summarize.return_value = MOCK_RESPONSE
+
+            resp = await client.post("/summarize", json={"github_url": VALID_URL})
+
+        assert resp.status_code == 200

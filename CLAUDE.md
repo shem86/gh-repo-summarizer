@@ -63,9 +63,23 @@ There is no single correct approach. Optimize for giving the LLM the best unders
 - Use the Git Trees API (`GET /repos/{owner}/{repo}/git/trees/{sha}?recursive=1`) to get the full file listing in one call
 - Fetch individual file contents via the raw content URL or Contents API
 
+### Caching
+
+Summaries are cached to disk after a successful LLM call and returned on subsequent requests for the same repo, skipping both GitHub API and Claude API calls.
+
+- **Cache key:** `f"{owner}__{repo}".lower()` — derived from `parse_github_url()` in `app.github`
+- **Storage:** `.cache/{owner}__{repo}.json` with the format `{"expires_at": <unix_timestamp>, "data": {...}}`
+- **Atomic writes:** Write to `.tmp` then rename, preventing partial reads on concurrent requests
+- **TTL expiry:** Checked on read; expired entries return `None` (treated as a miss)
+- **Error handling:** Corrupted files return `None` (no crash); `OSError` on write is swallowed — cache failures are never fatal
+- **Extensible:** `BaseCache` ABC in `app/cache.py`; swap to Redis by adding `RedisCache(BaseCache)` and changing one line in the lifespan
+
 ### Configuration
 
 - `ANTHROPIC_API_KEY` — **required**, set via environment variable. Never hardcode.
+- `CACHE_ENABLED` — default `true`. Set to `false` to disable caching entirely.
+- `CACHE_TTL` — default `604800` (1 week in seconds).
+- `CACHE_DIR` — default `.cache`.
 
 ## Project Structure
 
@@ -78,10 +92,16 @@ gh-repo-summarizer/
 ├── requirements.txt
 ├── app/
 │   ├── __init__.py
-│   ├── main.py          # FastAPI app, endpoint definition
+│   ├── main.py          # FastAPI app, lifespan, endpoint definition
+│   ├── cache.py         # BaseCache ABC + LocalFileCache
+│   ├── config.py        # Settings (env vars including cache config)
 │   ├── github.py        # GitHub API interaction, repo fetching
 │   ├── summarizer.py    # LLM prompt construction and API call
 │   └── models.py        # Pydantic request/response models
+├── tests/
+│   ├── test_cache.py    # Unit tests for cache module
+│   └── ...
+└── .cache/              # Runtime cache directory (gitignored)
 ```
 
 ## Commands
@@ -104,5 +124,5 @@ curl -X POST http://localhost:8000/summarize \
 - Use async/await throughout (FastAPI + httpx async)
 - Use Pydantic models for request/response validation
 - Keep error handling clean — return proper HTTP status codes with the error JSON format
-- No over-engineering: no database, no caching, no auth beyond API keys
+- No over-engineering: no database, no auth beyond API keys
 - Type hints on all functions

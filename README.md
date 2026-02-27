@@ -20,6 +20,18 @@ Optionally set a GitHub token for higher rate limits (60 req/hr unauthenticated 
 GITHUB_TOKEN=ghp_...
 ```
 
+## Caching
+
+Summaries are cached to disk with a 1-week TTL, so repeated requests for the same repo skip the GitHub API and LLM calls entirely.
+
+Cache files are stored in `.cache/` (e.g. `.cache/psf__requests.json`). To disable caching, set `CACHE_ENABLED=false`.
+
+| Variable | Default | Description |
+|---|---|---|
+| `CACHE_ENABLED` | `true` | Enable/disable the cache |
+| `CACHE_TTL` | `604800` | TTL in seconds (default: 1 week) |
+| `CACHE_DIR` | `.cache` | Directory to store cache files |
+
 ## Running
 
 ```bash

@@ -14,5 +14,8 @@ venv/
 .vscode/
 .idea/
 
+# Cache
+.cache/
+
 # Claude Code
 .claude/settings.local.json
